@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import maplibregl from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { lugares } from '../data/lugares'
+import { supabase } from '../supabase'
 
 const iconos = {
   cascada: '💧',
@@ -18,7 +18,35 @@ export default function MapPage3D() {
   const map = useRef(null)
   const watchIdRef = useRef(null)
   const navigate = useNavigate()
+
+  const [lugares, setLugares] = useState([])
+
+  useEffect(() => {
+    supabase
+      .from('lugares')
+      .select('*, categorias(nombre, icono, color)')
+      .eq('activo', true)
+      .eq('tipo', 'naturaleza')
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('Error cargando lugares:', error)
+        } else {
+          console.log('✅ Datos de Supabase:', data)
+          setLugares(data.map(l => ({
+          id: l.id,
+          nombre: l.nombre,
+          descripcion: l.descripcion,
+          coordenadas: [l.coordenadas_lat, l.coordenadas_lng],
+          parking: l.parking_lat ? [l.parking_lat, l.parking_lng] : null,
+          foto360: l.foto_360,
+          categoria: l.categorias?.nombre?.toLowerCase() || 'pueblo'
+})))
+        }
+      })
+  }, [])
+
   const [ruta, setRuta] = useState([])
+
   const [tiempo, setTiempo] = useState(null)
   const [navegando, setNavegando] = useState(false)
   const [busqueda, setBusqueda] = useState('')
@@ -55,28 +83,35 @@ export default function MapPage3D() {
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
           <polygon points="10,2 18,18 10,13 2,18" fill="white" opacity="0.9"/>
         </svg>
-      `)}`
+      `)}`         
+    })
 
-      // Agregar marcadores de lugares
+    return () => {
+      if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current)
+    }
+  }, [])
+  useEffect(() => {
+    if (lugares.length === 0) return
+
+    const intentar = setInterval(() => {
+      if (!map.current || !map.current.loaded()) return
+      clearInterval(intentar)
+
       lugares.forEach(lugar => {
         const el = document.createElement('div')
         el.innerHTML = `<div style="
           background: white;
           border: 2px solid #16a34a;
           border-radius: 50%;
-          width: 36px;
-          height: 36px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 18px;
-          cursor: pointer;
+          width: 36px; height: 36px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 18px; cursor: pointer;
           box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-        ">${iconos[lugar.categoria]}</div>`
+        ">${iconos[lugar.categoria] || '📍'}</div>`
 
         const popup = new maplibregl.Popup({ offset: 25 }).setHTML(`
           <div style="min-width:180px; font-family: sans-serif;">
-            <h3 style="margin:0 0 4px">${iconos[lugar.categoria]} ${lugar.nombre}</h3>
+            <h3 style="margin:0 0 4px">${iconos[lugar.categoria] || '📍'} ${lugar.nombre}</h3>
             <p style="font-size:12px; color:#555; margin:0 0 8px">${lugar.descripcion}</p>
             <button onclick="window.__agregarPunto(${lugar.id})" style="
               background:#2d6a4f; color:white; border:none;
@@ -90,12 +125,10 @@ export default function MapPage3D() {
           .setPopup(popup)
           .addTo(map.current)
       })
-    })
+    }, 200)
 
-    return () => {
-      if (watchIdRef.current) navigator.geolocation.clearWatch(watchIdRef.current)
-    }
-  }, [])
+    return () => clearInterval(intentar)
+  }, [lugares])
 
   // Exponer función global para popups
   useEffect(() => {

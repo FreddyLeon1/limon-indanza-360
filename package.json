@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@photo-sphere-viewer/core": "^5.14.1",
+    "@supabase/supabase-js": "^2.107.0",
     "leaflet": "^1.9.4",
     "maplibre-gl": "^5.24.0",
     "react": "^19.2.6",
